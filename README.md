@@ -25,7 +25,10 @@ This tool transcribes audio files (MP3, WAV) into text documents with optional t
 ## Setup
 
 1. Clone the repository
-2. Install required packages
+2. Install required packages:
+   ```
+   pip install -r requirements.txt
+   ```
 3. Copy `.env-sample` to `.env` and add your Hugging Face API token:
    ```
    cp .env-sample .env
@@ -43,6 +46,20 @@ python transcribe.py
 ```
 
 This will use the default model (large-v3-turbo) to transcribe all audio files in the `1-audio/` directory.
+
+### Using the Executable
+
+If you're using the packaged executable version:
+
+```bash
+transcribe.exe
+# or specify a model
+transcribe.exe medium
+# or use advanced options
+transcribe.exe --model large-v3-turbo --batch_size 4
+```
+
+Place your audio files in the `1-audio` folder next to the executable.
 
 ### Specifying a Model
 
@@ -69,6 +86,7 @@ Options:
 - `--model`: Specify the WhisperX model
 - `--batch_size`: Control batch size for performance (default is based on model)
 - `--compute_type`: Set computation precision (`float16`, `float32`, or `int8`)
+- `--language`: Set language code (default is "en" for English)
 
 ## Output
 
@@ -111,9 +129,32 @@ whisperx 1-audio/sample.mp3 \
   --output_dir 3-output/sample
 ```
 
+## Packaging the Executable
+
+To create a standalone executable that can be shared with others:
+
+1. Install PyInstaller:
+   ```bash
+   pip install pyinstaller
+   ```
+
+2. Create the executable:
+   ```bash
+   pyinstaller transcribe.spec
+   ```
+
+3. The executable will be created in the `dist` folder.
+
+4. To distribute:
+   - Share the entire `dist/transcribe` folder
+   - Users should ensure they have the correct folder structure:
+     - Place audio files in the `1-audio` folder
+     - Transcriptions will appear in the `3-output` folder
+
 ## Tips
 
 - For large files, use a smaller batch size to prevent memory issues
 - If you encounter CUDA out-of-memory errors, the script will automatically try with a smaller batch size
 - For faster processing on slower hardware, use the `tiny` or `base` models with `int8` compute type
 - Keep your API tokens in the `.env` file and never commit them directly to version control
+- When using the executable version, all necessary dependencies are bundled - no need to install Python or any packages

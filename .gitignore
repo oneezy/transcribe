@@ -1,3 +1,5 @@
+.venv
+
 # Ignore all files in these directories but keep the directories themselves
 0-queue/*
 !0-queue/
@@ -18,3 +20,6 @@
 # Ignore environment file with secrets
 .env
 .vnow
+
+build
+dist

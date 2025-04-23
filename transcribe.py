@@ -2,6 +2,7 @@ import os
 import time
 import whisperx
 import torch
+import multiprocessing
 import tiktoken
 from tabulate import tabulate
 import argparse
@@ -11,59 +12,118 @@ import gc
 os.makedirs("./3-output/", exist_ok=True)
 os.makedirs("./2-audio_processed/", exist_ok=True)
 
-# Timer start - use a more specific name to avoid collisions
+# Timer start
 script_start_time = time.time()
 print(f"DEBUG - script_start_time type: {type(script_start_time)}, value: {script_start_time}")
 
 # Argument parser
-parser = argparse.ArgumentParser(description='Transcribe audio files using WhisperX')
-parser.add_argument('model_pos', nargs='?', 
-                    choices=['tiny', 'base', 'small', 'medium', 'large-v2', 'large-v3', 'large-v3-turbo'],
-                    help='WhisperX model to use (shorthand)',
-                    default=None)
-parser.add_argument('--model', 
-                    choices=['tiny', 'base', 'small', 'medium', 'large-v2', 'large-v3-turbo'],
-                    help='WhisperX model to use',
-                    default='large-v3-turbo')
-parser.add_argument('--batch_size', type=int, help='Batch size for transcription', default=None)
-parser.add_argument('--compute_type', choices=['float16', 'float32', 'int8'], help='Compute type', default='float16')
+parser = argparse.ArgumentParser(description="Transcribe audio files using WhisperX")
+parser.add_argument(
+    "model_pos",
+    nargs="?",
+    choices=["tiny", "base", "small", "medium", "large-v2", "large-v3", "large-v3-turbo"],
+    help="WhisperX model to use (shorthand)",
+    default=None,
+)
+parser.add_argument(
+    "--model",
+    choices=["tiny", "base", "small", "medium", "large-v2", "large-v3-turbo"],
+    help="WhisperX model to use",
+    default="large-v3-turbo",
+)
+parser.add_argument(
+    "--batch_size",
+    type=int,
+    help="Override batch size",
+    default=None,
+)
+parser.add_argument(
+    "--compute_type",
+    choices=["float16", "float32", "int8"],
+    help="Override compute type",
+    default=None,
+)
+parser.add_argument(
+    "--language",
+    type=str,
+    help="Language code override (default: English)",
+    default="en",
+)
 args = parser.parse_args()
 
-# Process positional arguments
+# Determine model name
 model_name = args.model_pos if args.model_pos is not None else args.model
 
-# Determine appropriate batch size based on model
-if args.batch_size is None:
-    # Default batch sizes based on model size
-    batch_sizes = {
-        'tiny': 16,
-        'base': 16,
-        'small': 16,
-        'medium': 8,
-        'large-v2': 4,
-        'large-v3': 2,
-        'large-v3-turbo': 2
-    }
-    batch_size = batch_sizes.get(model_name, 4)
+# Base batch sizes keyed by model
+base_batch_sizes = {
+    "tiny": 16,
+    "base": 16,
+    "small": 16,
+    "medium": 8,
+    "large-v2": 4,
+    "large-v3": 2,
+    "large-v3-turbo": 2,
+}
+
+# --- Auto-detect hardware and pick optimal settings ---
+if torch.cuda.is_available():
+    device = "cuda"
+    props = torch.cuda.get_device_properties(0)
+    major = props.major
+    vram_gb = props.total_memory / (1024 ** 3)
+
+    # Enable TF32 acceleration on Ampere+ GPUs
+    if major >= 8:
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+
+    # Default to float16 on all CUDA GPUs
+    auto_compute = "float16"
+
+    # Base batch size and doubling for ample VRAM
+    auto_batch = base_batch_sizes.get(model_name, 4)
+    if vram_gb >= 16:
+        auto_batch *= 2
 else:
-    batch_size = args.batch_size
+    device = "cpu"
+    auto_compute = "int8"
+    cores = multiprocessing.cpu_count()
+    auto_batch = min(max(1, cores // 2), 2)
 
-# Load WhisperX model
-device = "cuda" if torch.cuda.is_available() else "cpu"
+# Allow manual overrides
+compute_type = args.compute_type or auto_compute
+batch_size = args.batch_size or auto_batch
+
+# Force float32 on pre-Ampere if needed
+if device == "cuda" and torch.cuda.get_device_properties(0).major < 8:
+    compute_type = "float32"
+
 print(f"\n🤖 WhisperX Model: {model_name}")
-print(f"🧠 Using batch size: {batch_size}")
-print(f"💻 Device: {device} | Compute type: {args.compute_type}")
+print(f"🧠 Batch size:      {batch_size}")
+print(f"💻 Device:          {device}")
+print(f"⚙️  Compute type:    {compute_type}")
+print(f"🌐 Language:        {args.language}")
+# --- end auto-detect block ---
 
-try:
-    # Try to clear any existing models from GPU memory
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-        gc.collect()
-    
-    model = whisperx.load_model(model_name, device, compute_type=args.compute_type)
-except Exception as e:
-    print(f"Error loading models: {str(e)}")
-    print("Try using a smaller model, reducing batch size, or using int8 compute type")
+# Load WhisperX model with fallback chain
+fallback_order = [compute_type]
+if "float16" not in fallback_order:
+    fallback_order.insert(0, "float16")
+if "float32" not in fallback_order:
+    fallback_order.append("float32")
+if "int8" not in fallback_order:
+    fallback_order.append("int8")
+
+for ct in fallback_order:
+    try:
+        model = whisperx.load_model(model_name, device, compute_type=ct)
+        compute_type = ct
+        print(f"Loaded model with compute type: {ct}")
+        break
+    except Exception as e:
+        print(f"Failed load with {ct}, trying next...")
+else:
+    print(f"Error loading model: {e}")
     exit(1)
 
 # OpenAI tokenizer
@@ -72,143 +132,87 @@ def count_tokens(text):
     return len(encoding.encode(text))
 
 audio_folder = "./1-audio"
-output_folder = "./3-output/"
+output_folder = "./3-output"
 stats = []
 
 total_size = total_chars = total_tokens = total_time = total_length = 0
 
 for filename in os.listdir(audio_folder):
-    if filename.endswith((".mp3", ".wav")):
-        file_start_time = time.time()
-        input_path = os.path.join(audio_folder, filename)
+    if filename.lower().endswith((".mp3", ".wav")):
+        start_time = time.time()
+        path = os.path.join(audio_folder, filename)
         print(f"\nProcessing {filename}...")
-
         try:
-            # WhisperX transcription
-            audio = whisperx.load_audio(input_path)
-            
-            # Use try/except with batch size reduction for OOM errors
-            try:
-                result = model.transcribe(audio, batch_size=batch_size)
-            except RuntimeError as e:
-                if "CUDA out of memory" in str(e) and batch_size > 1:
-                    print(f"🚨 CUDA out of memory. Reducing batch size to {batch_size//2}...")
-                    torch.cuda.empty_cache()
-                    gc.collect()
-                    result = model.transcribe(audio, batch_size=batch_size//2)
-                else:
-                    raise
+            audio = whisperx.load_audio(path)
+            result = model.transcribe(
+                audio,
+                batch_size=batch_size,
+                language=args.language
+            )
 
-            # Align word-level timestamps
-            model_a, metadata = whisperx.load_align_model(language_code=result["language"], device=device)
-            result_aligned = whisperx.align(result["segments"], model_a, metadata, audio, device)
-            
-            # Free up memory after alignment
-            del model_a
-            torch.cuda.empty_cache()
-            gc.collect()
+            # Handle possible OOM during transcription
+            # (Older GPUs may need batch_size reduction)
+        except RuntimeError as oom:
+            if device == "cuda" and "CUDA out of memory" in str(oom) and batch_size > 1:
+                print(f"🚨 OOM, reducing batch to {batch_size//2}...")
+                torch.cuda.empty_cache(); gc.collect()
+                result = model.transcribe(
+                    audio,
+                    batch_size=batch_size//2,
+                    language=args.language
+                )
+            else:
+                raise
 
-            # Process segments
-            segments = result_aligned["segments"]
-            
-            # Format segments with MM:SS timestamps followed by > and then text
-            transcript_segments = []
-            
-            # Format each segment with timestamps in MM:SS format
-            for seg in segments:
-                if not seg["text"].strip():
-                    continue
-                    
-                # Format start time as MM:SS
-                start_seconds = int(seg["start"])
-                start_minutes = start_seconds // 60
-                start_seconds_remainder = start_seconds % 60
-                start_time_formatted = f"{start_minutes:02d}:{start_seconds_remainder:02d}"
-                
-                # Format with start timestamp followed by > and then the text
-                transcript_segments.append(f"{start_time_formatted} > {seg['text'].strip()}")
-            
-            transcript = "\n".join(transcript_segments)
+        # Word-level alignment
+        model_a, metadata = whisperx.load_align_model(
+            language_code=result["language"], device=device
+        )
+        aligned = whisperx.align(result["segments"], model_a, metadata, audio, device)
+        del model_a
+        if device == "cuda": torch.cuda.empty_cache(); gc.collect()
 
-            # Save output
-            base_filename = os.path.splitext(filename)[0]
-            file_output_folder = os.path.join(output_folder, base_filename)
-            os.makedirs(file_output_folder, exist_ok=True)
+        segments = aligned["segments"]
+        transcripts = []
+        for seg in segments:
+            text = seg["text"].strip()
+            if text:
+                m, s = divmod(int(seg["start"]), 60)
+                transcripts.append(f"{m:02d}:{s:02d} > {text}")
+        out_text = "\n".join(transcripts)
 
-            # Save with timestamps
-            timestamp_output_path = os.path.join(file_output_folder, f"{base_filename}-timestamps.txt")
-            with open(timestamp_output_path, "w", encoding="utf-8") as f:
-                f.write(transcript)
+        # Save outputs
+        base = os.path.splitext(filename)[0]
+        out_dir = os.path.join(output_folder, base)
+        os.makedirs(out_dir, exist_ok=True)
+        with open(os.path.join(out_dir, f"{base}-timestamps.txt"), "w", encoding="utf-8") as f:
+            f.write(out_text)
+        plain = " ".join(seg["text"].strip() for seg in segments if seg["text"].strip())
+        with open(os.path.join(out_dir, f"{base}.txt"), "w", encoding="utf-8") as f:
+            f.write(plain)
 
-            # Create a version without timestamps
-            plain_text = []
-            for seg in segments:
-                if seg["text"].strip():
-                    plain_text.append(seg["text"].strip())
-            plain_transcript = " ".join(plain_text)
+        # Stats
+        duration = result["segments"][-1]["end"] / 60
+        elapsed = time.time() - start_time
+        size_kb = os.path.getsize(os.path.join(out_dir, f"{base}-timestamps.txt")) / 1024
+        tcnt = count_tokens(out_text)
+        cchar = len(out_text)
+        total_length += duration; total_time += elapsed
+        total_size += size_kb; total_tokens += tcnt; total_chars += cchar
+        stats.append([f"✅ {base}-{model_name}.txt", f"{int(duration)}:{int((duration%1)*60):02d}", f"{size_kb:.2f}", cchar, tcnt, f"{elapsed:.2f}"])
+        print(f"✅ Completed in {elapsed:.2f}s")
 
-            # Save without timestamps
-            plain_output_path = os.path.join(file_output_folder, f"{base_filename}.txt")
-            with open(plain_output_path, "w", encoding="utf-8") as f:
-                f.write(plain_transcript)
-
-            # Calculate stats
-            file_time = time.time() - file_start_time
-            file_size = os.path.getsize(timestamp_output_path) / 1024
-            char_count = len(transcript)
-            token_count = count_tokens(transcript)
-
-            audio_length = result["segments"][-1]["end"] / 60
-            total_length += audio_length
-
-            minutes = int(audio_length)
-            seconds = int((audio_length - minutes) * 60)
-            length_formatted = f"{minutes}:{seconds:02d}"
-
-            total_size += file_size
-            total_chars += char_count
-            total_tokens += token_count
-            total_time += file_time
-
-            stats.append([
-                f"✅ {os.path.splitext(filename)[0]}-{model_name}.txt",
-                length_formatted,
-                f"{file_size:.2f}",
-                char_count,
-                token_count,
-                f"{file_time:.2f}"
-            ])
-            
-            print(f"✅ Completed {filename} in {file_time:.2f}s")
-            
-        except Exception as e:
-            print(f"❌ Error processing {filename}: {str(e)}")
-            # Try to clear memory in case of error
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-                gc.collect()
-
-# Results
+# Report
 print("\nResults")
-headers = ["✅ File", "Audio", "Size (KB)", "Characters", "Tokens", "Time (s)"]
-print(tabulate(stats, headers=headers, tablefmt="grid"))
+print(tabulate(stats, headers=["File","Audio","Size (KB)","Chars","Tokens","Time(s)"], tablefmt="grid"))
 
-# Debug before calculating elapsed time
-print(f"DEBUG - Before elapsed_time calculation:")
-print(f"  - script_start_time type: {type(script_start_time)}, value: {script_start_time}")
-print(f"  - current time type: {type(time.time())}, value: {time.time()}")
-
-# Calculate elapsed time
-elapsed_time = time.time() - script_start_time
-
-total_minutes = int(total_length)
-total_seconds = int((total_length - total_minutes) * 60)
+# Totals with multi-line formatting
+elapsed_total = time.time() - script_start_time
+m, s = divmod(int(total_length*60), 60)
 
 print("\nTotals")
-print(f"Time:         {elapsed_time:.2f} seconds")
-print(f"Transcribed:  {total_minutes}:{total_seconds:02d} minutes")
+print(f"Time:         {elapsed_total:.2f} seconds")
+print(f"Transcribed:  {m}:{s:02d} minutes")
 print(f"Size:         {total_size:.2f} KB")
 print(f"Characters:   {total_chars}")
 print(f"Tokens:       {total_tokens}")
-
-
