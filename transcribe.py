@@ -8,8 +8,8 @@ import argparse
 import gc
 
 # Create directories if they don't exist
-os.makedirs("./output/", exist_ok=True)
-os.makedirs("./audio_processed/", exist_ok=True)
+os.makedirs("./3-output/", exist_ok=True)
+os.makedirs("./2-audio_processed/", exist_ok=True)
 
 # Timer start - use a more specific name to avoid collisions
 script_start_time = time.time()
@@ -71,8 +71,8 @@ encoding = tiktoken.encoding_for_model("gpt-4")
 def count_tokens(text):
     return len(encoding.encode(text))
 
-audio_folder = "./audio"
-output_folder = "./output/"
+audio_folder = "./1-audio"
+output_folder = "./3-output/"
 stats = []
 
 total_size = total_chars = total_tokens = total_time = total_length = 0

@@ -8,10 +8,10 @@ This tool transcribes audio files (MP3, WAV) into text documents with optional t
 
 ## Directory Structure
 
-- `audio/`: Place your audio files here for processing
-- `audio_processed/`: Contains processed audio files
-- `output/`: Contains transcription results
-- `0-queu/`: Queue folder for files to be processed
+- `0-queue/`: queue folder for files to be processed
+- `1-audio/`: Place your audio files here for processing
+- `2-audio_processed/`: Contains processed audio files
+- `3-output/`: Contains transcription results
 
 ## Requirements
 
@@ -42,7 +42,7 @@ This tool transcribes audio files (MP3, WAV) into text documents with optional t
 python transcribe.py
 ```
 
-This will use the default model (large-v3-turbo) to transcribe all audio files in the `audio/` directory.
+This will use the default model (large-v3-turbo) to transcribe all audio files in the `1-audio/` directory.
 
 ### Specifying a Model
 
@@ -74,8 +74,8 @@ Options:
 
 For each audio file processed, the tool generates:
 
-1. A plain text transcript: `output/[filename]/[filename].txt`
-2. A timestamped transcript: `output/[filename]/[filename]-timestamps.txt`
+1. A plain text transcript: `3-output/[filename]/[filename].txt`
+2. A timestamped transcript: `3-output/[filename]/[filename]-timestamps.txt`
 
 The timestamps format is `MM:SS > transcript text`
 
@@ -104,11 +104,11 @@ python transcribe.py --model large-v3-turbo --batch_size 4 --compute_type int8
 For direct WhisperX commands (as shown in `commands.txt`), make sure to use your environment variable:
 
 ```bash
-whisperx audio/sample.mp3 \
+whisperx 1-audio/sample.mp3 \
   --model large-v3-turbo \
   --diarize \
   --hf_token ${HF_TOKEN} \
-  --output_dir output/sample
+  --output_dir 3-output/sample
 ```
 
 ## Tips

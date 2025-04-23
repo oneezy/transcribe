@@ -1,6 +1,16 @@
-.vnow
-0-queu
-audio
-audio_processed
-output
+# Ignore all files in these directories but keep the directories themselves
+0-queue/*
+!0-queue/
+
+1-audio/*
+!1-audio/
+
+2-audio_processed/*
+!2-audio_processed/
+
+3-output/*
+!3-output/
+
+# Ignore environment file with secrets
 .env
+.vnow
