@@ -1,4 +1,0 @@
-whisperx
-torch
-tiktoken
-tabulate

@@ -13,6 +13,11 @@ This tool transcribes audio files (MP3, WAV) into text documents with optional t
 - `2-audio_processed/`: Contains processed audio files
 - `3-output/`: Contains transcription results
 
+## Prerequsites
+
+- Python 3.12.x (must be < 3.13)
+- [Poetry](https://python-poetry.org/) (for dependency & venv management)
+- 
 ## Requirements
 
 - Python 3.x
@@ -24,18 +29,51 @@ This tool transcribes audio files (MP3, WAV) into text documents with optional t
 
 ## Setup
 
-1. Clone the repository
-2. Install required packages:
+You can choose **one** of two workflows: traditional `pip` or modern `Poetry`.
+
+### A) Using Poetry (recommended)
+
+1. Install Poetry globally (or via pipx):
+   ```bash
+   pip install poetry
+   # or, if you have pipx:
+   pipx install poetry
    ```
+
+2. Clone the repo and `cd` into it:
+   ```bash
+   git clone https://github.com/oneezy/transcribe.git
+   cd transcribe
+   ```
+
+3. Install dependencies and create a venv automatically:
+   ```bash
+   poetry install
+   ```
+
+4. Run the script:
+   ```bash
+   poetry run python transcribe.py
+   ```
+
+### B) Using pip and a virtual environment
+
+1. Create and activate a venv:
+   ```bash
+   python -m venv .venv
+   .venv\Scripts\activate  # For Windows
+   ```
+
+2. Install dependencies:
+   ```bash
    pip install -r requirements.txt
    ```
-3. Copy `.env-sample` to `.env` and add your Hugging Face API token:
-   ```
+
+3. Copy and edit your `.env` file:
+   ```bash
    cp .env-sample .env
    ```
-4. Edit the `.env` file and replace `your_hugging_face_token_here` with your actual Hugging Face API token
-   
-   > You can get your token from [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+   Add your Hugging Face API token from [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
 
 ## Usage
 
