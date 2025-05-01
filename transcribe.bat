@@ -1,4 +1,4 @@
 @echo off
-cd /d v:\10.python\transcribe
+cd /d %~dp0
 poetry run watcher
 pause

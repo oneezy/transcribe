@@ -4,7 +4,7 @@ import subprocess
 import threading
 import time
 import os
-from colors import cyan, gray, green, red, yellow
+from colors import cyan, gray
 
 def pretty_path(path):
     return path.replace("\\", "/")
