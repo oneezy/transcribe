@@ -188,11 +188,11 @@ def main():
 
 
     # ✅ Now that everything is locked in, print clean log
-    print(f"\n🤖 WhisperX Model: {gray(model_name)}")
-    print(f"🧠 Batch size: {gray(batch_size)}")
-    print(f"💻 Device: {gray(device)}")
-    print(f"⚙️ Compute type: {gray(compute_type)}")
-    print(f"🌐 Language: {gray(args.language)}")
+    # print(f"\n🤖 WhisperX Model: {gray(model_name)}")
+    # print(f"🧠 Batch size: {gray(batch_size)}")
+    # print(f"💻 Device: {gray(device)}")
+    # print(f"⚙️ Compute type: {gray(compute_type)}")
+    # print(f"🌐 Language: {gray(args.language)}")
 
     encoding = tiktoken.encoding_for_model("gpt-4")
 
@@ -205,12 +205,14 @@ def main():
 
     total_size = total_chars = total_tokens = total_time = total_length = 0
 
+    print("")
+    
     for filename in os.listdir(audio_folder):
         if filename.lower().endswith((".mp3", ".wav")):
             start_time = time.time()
             path = os.path.join(audio_folder, filename)
             
-            print(f"\n✨ Processing {cyan(filename)}...")
+            print(f"🤖 Processing {gray(filename)}...")
 
             try:
                 audio = whisperx.load_audio(path)
@@ -274,8 +276,8 @@ def main():
             total_chars += cchar
             pretty_path = out_txt_path.replace("\\", "/")
             stats.append([f"{cyan(pretty_path)}", f"{int(duration)}:{int((duration % 1) * 60):02d}", f"{size_kb:.2f}", cchar, tcnt, f"{elapsed:.2f}"])
-            print(f"✅ Completed in {green(f"{elapsed:.2f}s")}")
-            print("")
+            # print(f"✅ Completed in {green(f"{elapsed:.2f}s")}")
+            # print("")
 
     print("\nResults")
     print(tabulate(stats, headers=["File", "Audio", "Size (KB)", "Chars", "Tokens", "Time(s)"], tablefmt="grid"))
