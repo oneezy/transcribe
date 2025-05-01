@@ -20,6 +20,9 @@ class FileHandler(FileSystemEventHandler):
         self.pending_files = []
         self.processing = False
         self.timer = None
+        self.batch_timer = None
+        self.batch_files = []
+        self.last_file_time = 0
 
     def process_files(self):
         if self.pending_files and not self.processing:
@@ -29,6 +32,19 @@ class FileHandler(FileSystemEventHandler):
             self.pending_files = []
             self.processing = False
             print(f"\n🟢 Waiting to transcribe new audio files in {cyan(self.watch_path_pretty)} ...\n")
+
+    def display_batch_files(self):
+        """Display consolidated message for multiple files detected in a batch"""
+        if self.batch_files:
+            # Add a short delay before showing the found files message
+            time.sleep(2)
+            print("\n")
+            print(f"🔍 Found {len(self.batch_files)} Audio File{'s' if len(self.batch_files) > 1 else ''}!")
+            print("─" * 40 + "\n")
+            for file_name in self.batch_files:
+                print(f"🎧 Audio File: {cyan(file_name)}")
+            
+            self.batch_files = []  # Clear the batch
 
     def check_existing_files(self):
         """Check for existing audio files in the watch directory and process them"""
@@ -48,10 +64,23 @@ class FileHandler(FileSystemEventHandler):
     def on_created(self, event):
         if not event.is_directory and event.src_path.lower().endswith(('.mp3', '.wav')):
             file_name = os.path.basename(event.src_path)
-            print(f"🎧 Audio File: {cyan(file_name)}")
             self.pending_files.append(file_name)
+            
+            # Add to batch for consolidated display
+            self.batch_files.append(file_name)
+            current_time = time.time()
+            self.last_file_time = current_time
+            
+            # Cancel existing timers
             if self.timer is not None:
                 self.timer.cancel()
+            if self.batch_timer is not None:
+                self.batch_timer.cancel()
+            
+            # Set new timers
+            self.batch_timer = threading.Timer(0.5, self.display_batch_files)  # Short delay to collect multiple files
+            self.batch_timer.start()
+            
             self.timer = threading.Timer(3.0, self.process_files)
             self.timer.start()
 
@@ -71,6 +100,11 @@ def main():
 
     existing_files = file_handler.check_existing_files()
     if existing_files:
+        # Add a short delay before showing the found files message
+        time.sleep(2)
+        print("\n")
+        print(f"🔍 Found {len(existing_files)} Audio File{'s' if len(existing_files) > 1 else ''}!")
+        print("─" * 40 + "\n")
         for file_name in existing_files:
             print(f"🎧 Audio File: {cyan(file_name)}")
 

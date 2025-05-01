@@ -212,7 +212,7 @@ def main():
             start_time = time.time()
             path = os.path.join(audio_folder, filename)
             
-            print(f"🤖 Processing {gray(filename)}...")
+            print(f"➜ Processing {gray(filename)}...")
 
             try:
                 audio = whisperx.load_audio(path)
@@ -263,6 +263,15 @@ def main():
             ai_text = create_ai_cleaned_text(raw_text)
             with open(os.path.join(original_dir, f"{base}.ai.txt"), "w", encoding="utf-8") as f:
                 f.write(ai_text)
+
+            # Copy the audio file to the output directory
+            audio_out_path = os.path.join(out_dir, filename)
+            with open(path, "rb") as src_file, open(audio_out_path, "wb") as dst_file:
+                dst_file.write(src_file.read())
+            
+            # Move the processed audio file to the processed folder
+            processed_path = os.path.join("./2-audio_processed/", filename)
+            os.rename(path, processed_path)
 
             duration = result["segments"][-1]["end"] / 60
             elapsed = time.time() - start_time
