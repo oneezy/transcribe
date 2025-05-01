@@ -1,6 +1,8 @@
 import argparse
 import gc
 import multiprocessing
+import io
+import contextlib
 import os
 import re
 import time
@@ -8,6 +10,25 @@ import tiktoken
 import torch
 import whisperx
 from tabulate import tabulate
+import warnings
+import builtins
+import subprocess
+import sys
+from colors import cyan, gray, green, red, yellow
+
+warnings.filterwarnings("ignore")
+
+# Suppress all prints temporarily
+class SilentPrint:
+    def write(self, *args, **kwargs): pass
+    def flush(self): pass
+
+def reinstall_whisperx():
+    """Attempt to reinstall WhisperX package to fix missing model files"""
+    print("🔄 Attempting to fix WhisperX model files by reinstalling...")
+    subprocess.check_call([sys.executable, "-m", "pip", "uninstall", "-y", "whisperx"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "whisperx==3.3.2"])
+    return True
 
 def remove_filler_words(text):
     """Remove filler words, disfluencies, and nonverbal sounds from text cleanly."""
@@ -110,12 +131,6 @@ def main():
     if device == "cuda" and torch.cuda.get_device_properties(0).major < 8:
         compute_type = "float32"
 
-    print(f"\n🤖 WhisperX Model: {model_name}")
-    print(f"🧠 Batch size: {batch_size}")
-    print(f"💻 Device: {device}")
-    print(f"⚙️ Compute type: {compute_type}")
-    print(f"🌐 Language: {args.language}")
-
     fallback_order = [compute_type]
     if "float16" not in fallback_order:
         fallback_order.insert(0, "float16")
@@ -124,20 +139,60 @@ def main():
     if "int8" not in fallback_order:
         fallback_order.append("int8")
 
-    model = None
     last_error = None
+    tried_reinstall = False
+
     for ct in fallback_order:
         try:
-            model = whisperx.load_model(model_name, device, compute_type=ct)
+            # Temporarily silence stdout/stderr
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                model = whisperx.load_model(model_name, device, compute_type=ct, language=args.language)
+                whisperx.load_align_model(language_code=args.language, device=device)
             compute_type = ct
-            print(f"Loaded model with compute type: {ct}")
             break
         except Exception as err:
             last_error = err
-            print(f"Failed load with {ct}, trying next...")
-    else:
-        print(f"Error loading model: {last_error}")
+            print(f"❌ Failed load with {ct}, trying next...")
+    
+    # If all compute types failed and we haven't tried reinstalling yet
+    if model is None and not tried_reinstall:
+        if "Model file not found" in str(last_error):
+            print("\n🔄 Missing model files detected. Attempting to reinstall WhisperX...")
+            tried_reinstall = True
+            
+            try:
+                reinstall_whisperx()
+                print("✅ WhisperX reinstalled. Retrying model loading...")
+                
+                # Try loading the model again after reinstall
+                for ct in fallback_order:
+                    try:
+                        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                            model = whisperx.load_model(model_name, device, compute_type=ct, language=args.language)
+                            whisperx.load_align_model(language_code=args.language, device=device)
+                        compute_type = ct
+                        break
+                    except Exception as err:
+                        last_error = err
+                        print(f"❌ Failed load with {ct} after reinstall, trying next...")
+            except Exception as reinstall_err:
+                print(f"❌ Failed to reinstall WhisperX: {reinstall_err}")
+                
+    if model is None:
+        print(f"\n🚨 Error loading model: {last_error}")
+        print("\n🔧 Try these manual steps to fix the issue:")
+        print("1. Run: pip uninstall whisperx -y")
+        print("2. Run: pip install whisperx==3.3.2")
+        print("3. Do NOT run any Lightning upgrade commands")
         exit(1)
+
+
+    # ✅ Now that everything is locked in, print clean log
+    print(f"\n🤖 WhisperX Model: {gray(model_name)}")
+    print(f"🧠 Batch size: {gray(batch_size)}")
+    print(f"💻 Device: {gray(device)}")
+    print(f"⚙️ Compute type: {gray(compute_type)}")
+    print(f"🌐 Language: {gray(args.language)}")
 
     encoding = tiktoken.encoding_for_model("gpt-4")
 
@@ -154,7 +209,9 @@ def main():
         if filename.lower().endswith((".mp3", ".wav")):
             start_time = time.time()
             path = os.path.join(audio_folder, filename)
-            print(f"\nProcessing {filename}...")
+            
+            print(f"\n✨ Processing {cyan(filename)}...")
+
             try:
                 audio = whisperx.load_audio(path)
                 result = model.transcribe(audio, batch_size=batch_size, language=args.language)
@@ -198,7 +255,8 @@ def main():
                 f.write(raw_text)
             with open(os.path.join(original_dir, f"{base}.min.txt"), "w", encoding="utf-8") as f:
                 f.write(min_text)
-            with open(os.path.join(out_dir, f"{base}.txt"), "w", encoding="utf-8") as f:
+            out_txt_path = os.path.join(out_dir, f"{base}.txt")
+            with open(out_txt_path, "w", encoding="utf-8") as f:
                 f.write(min_text)
             ai_text = create_ai_cleaned_text(raw_text)
             with open(os.path.join(original_dir, f"{base}.ai.txt"), "w", encoding="utf-8") as f:
@@ -214,8 +272,10 @@ def main():
             total_size += size_kb
             total_tokens += tcnt
             total_chars += cchar
-            stats.append([f"✅ {base}-{model_name}.txt", f"{int(duration)}:{int((duration % 1) * 60):02d}", f"{size_kb:.2f}", cchar, tcnt, f"{elapsed:.2f}"])
-            print(f"✅ Completed in {elapsed:.2f}s")
+            pretty_path = out_txt_path.replace("\\", "/")
+            stats.append([f"{cyan(pretty_path)}", f"{int(duration)}:{int((duration % 1) * 60):02d}", f"{size_kb:.2f}", cchar, tcnt, f"{elapsed:.2f}"])
+            print(f"✅ Completed in {green(f"{elapsed:.2f}s")}")
+            print("")
 
     print("\nResults")
     print(tabulate(stats, headers=["File", "Audio", "Size (KB)", "Chars", "Tokens", "Time(s)"], tablefmt="grid"))
@@ -223,11 +283,12 @@ def main():
     elapsed_total = time.time() - script_start_time
     m, s = divmod(int(total_length * 60), 60)
     print("\nTotals")
-    print(f"Time: {elapsed_total:.2f} seconds")
-    print(f"Transcribed: {m}:{s:02d} minutes")
-    print(f"Size: {total_size:.2f} KB")
-    print(f"Characters: {total_chars}")
-    print(f"Tokens: {total_tokens}")
+    print(f"Time: {gray(f'{elapsed_total:.2f} seconds')}")
+    print(f"Transcribed: {gray(f'{m}:{s:02d} minutes')}")
+    print(f"Size: {gray(f'{total_size:.2f} KB')}")
+    print(f"Characters: {gray(str(total_chars))}")
+    print(f"Tokens: {gray(str(total_tokens))}")
+    print("\n" + "─" * 91 + "\n")
 
 if __name__ == "__main__":
     main()
