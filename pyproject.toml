@@ -14,11 +14,12 @@ authors = [{ name = "oneezy", email = "justinoneill2007@gmail.com" }]
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 
-dependencies = [
-	"whisperx >=3.3.2,<4.0.0",
-	"tiktoken >=0.9.0,<1.0.0",
-	"tabulate >=0.9.0,<1.0.0",
-]
+# dependencies = [
+# 	"whisperx >=3.3.2,<4.0.0",
+# 	"tiktoken >=0.9.0,<1.0.0",
+# 	"tabulate >=0.9.0,<1.0.0",
+# 	"watchdog (>=6.0.0,<7.0.0)",
+# ]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
@@ -26,5 +27,16 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 transcribe = "transcribe:main"
+watcher = "watcher:main"
 
 [tool.poetry.dependencies]
+python = ">=3.12,<3.13"
+whisperx = ">=3.3.2,<4.0.0"
+tiktoken = ">=0.9.0,<1.0.0"
+tabulate = ">=0.9.0,<1.0.0"
+watchdog = ">=6.0.0,<7.0.0"
+
+[tool.poetry-auto-export]
+output = "requirements.txt"
+without_hashes = true
+without = ["dev"]
