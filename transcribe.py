@@ -11,10 +11,9 @@ import torch
 import whisperx
 from tabulate import tabulate
 import warnings
-import builtins
 import subprocess
 import sys
-from colors import cyan, gray, green, red, yellow
+from colors import cyan, gray
 
 warnings.filterwarnings("ignore")
 
@@ -271,7 +270,8 @@ def main():
             
             # Move the processed audio file to the processed folder
             processed_path = os.path.join("./2-audio_processed/", filename)
-            os.rename(path, processed_path)
+            # Use os.replace which overwrites the destination file if it exists (unlike os.rename)
+            os.replace(path, processed_path)
 
             duration = result["segments"][-1]["end"] / 60
             elapsed = time.time() - start_time

@@ -1,5 +1,6 @@
 __pycache__/
 .venv
+desktop.ini
 
 # Ignore all files in these directories but keep the directories themselves
 0-queue/*
