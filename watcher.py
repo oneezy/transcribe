@@ -4,7 +4,64 @@ import subprocess
 import threading
 import time
 import os
+import shutil
 from colors import cyan, gray
+
+def cleanup_google_drive_temp():
+    """Silently clean up temporary Google Drive folders"""
+    user_profile = os.environ.get('USERPROFILE')
+    if not user_profile:
+        return
+        
+    drive_path = os.path.join(user_profile, 'Google Drive', 'Layerd')
+    if not os.path.exists(drive_path):
+        return
+        
+    tmp_folders = ['.tmp.drivedownload', '.tmp.driveupload']
+    
+    for folder in tmp_folders:
+        folder_path = os.path.join(drive_path, folder)
+        if os.path.exists(folder_path):
+            try:
+                shutil.rmtree(folder_path, ignore_errors=True)
+            except:
+                pass  # Silently ignore any errors
+
+class DriveHandler(FileSystemEventHandler):
+    """Handler for monitoring Google Drive temp folder creation"""
+    def __init__(self):
+        self.tmp_folders = ['.tmp.drivedownload', '.tmp.driveupload']
+        
+    def on_created(self, event):
+        if event.is_directory:
+            dirname = os.path.basename(event.src_path)
+            if dirname in self.tmp_folders:
+                # Use a small delay to let Drive finish any initial operations
+                threading.Timer(1.0, lambda: self._remove_folder(event.src_path)).start()
+    
+    def _remove_folder(self, path):
+        """Remove a folder with a delay to avoid conflicts"""
+        try:
+            if os.path.exists(path):
+                shutil.rmtree(path, ignore_errors=True)
+        except:
+            pass  # Silently ignore any errors
+
+def setup_drive_watcher():
+    """Set up a watchdog observer for Google Drive temp folders"""
+    user_profile = os.environ.get('USERPROFILE')
+    if not user_profile:
+        return None
+        
+    drive_path = os.path.join(user_profile, 'Google Drive', 'Layerd')
+    if not os.path.exists(drive_path):
+        return None
+    
+    drive_handler = DriveHandler()
+    drive_observer = Observer()
+    drive_observer.schedule(drive_handler, path=drive_path, recursive=False)
+    drive_observer.start()
+    return drive_observer
 
 def pretty_path(path):
     return path.replace("\\", "/")
@@ -23,12 +80,13 @@ class FileHandler(FileSystemEventHandler):
         self.batch_timer = None
         self.batch_files = []
         self.last_file_time = 0
-
+        
     def process_files(self):
         if self.pending_files and not self.processing:
             self.processing = True
             print("")  # newline before transcribing
             subprocess.run(["poetry", "run", "transcribe"])
+            cleanup_google_drive_temp()  # Clean up temporary Google Drive folders
             self.pending_files = []
             self.processing = False
             print(f"\n🟢 Waiting to transcribe new audio files in {cyan(self.watch_path_pretty)} ...\n")
@@ -90,6 +148,9 @@ def main():
     observer.schedule(file_handler, path=WATCH_PATH, recursive=False)
     observer.start()
 
+    # Set up Google Drive watcher
+    drive_observer = setup_drive_watcher()
+
     print("\nINSTRUCTIONS\n")
     print(f" 1. Add audio files into {gray('1-audio/')}")
     print(f" 2. Transcripts are saved to {gray('2-output/')}")
@@ -114,7 +175,11 @@ def main():
         if file_handler.timer:
             file_handler.timer.cancel()
         observer.stop()
+        if drive_observer:
+            drive_observer.stop()
     observer.join()
+    if drive_observer:
+        drive_observer.join()
 
 if __name__ == "__main__":
     main()

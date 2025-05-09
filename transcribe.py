@@ -248,7 +248,7 @@ def main():
             temp_current_audio_dir = os.path.join(temp_output_root_dir, base)
             os.makedirs(temp_current_audio_dir, exist_ok=True)
 
-            timestamp_text = "\\n".join(transcripts)
+            timestamp_text = "\n".join(transcripts)
             raw_text = " ".join(seg["text"].strip() for seg in segments if seg["text"].strip())
             min_text = remove_filler_words(raw_text)
             ai_text = create_ai_cleaned_text(raw_text)
@@ -309,9 +309,9 @@ def main():
             total_size += size_kb
             total_tokens += tcnt
             total_chars += cchar
-            # Ensure stats use the final path for display
-            pretty_path = final_main_out_txt_path.replace("\\\\", "/")
-            stats.append([f"{cyan(pretty_path)}", f"{int(duration)}:{int((duration % 1) * 60):02d}", f"{size_kb:.2f}", cchar, tcnt, f"{elapsed:.2f}"])
+            # Get just the filename for display in the table
+            filename_only = os.path.basename(final_main_out_txt_path)
+            stats.append([f"{cyan(filename_only)}", f"{int(duration)}:{int((duration % 1) * 60):02d}", f"{size_kb:.2f}", cchar, tcnt, f"{elapsed:.2f}"])
             # print(f"✅ Completed in {green(f'{elapsed:.2f}s')}")
             # print("")
 
@@ -322,7 +322,7 @@ def main():
     except OSError:
         pass # Ignore if not empty or other issues, not critical
 
-    print("\\nResults")
+    print("\nResults")
     print(tabulate(stats, headers=["File", "Audio", "Size (KB)", "Chars", "Tokens", "Time(s)"], tablefmt="grid"))
 
     elapsed_total = time.time() - script_start_time
