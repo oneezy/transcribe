@@ -1,5 +1,6 @@
 @echo off
-title 🔄 Resetting Poetry Env (CUDA-ready)
+title Resetting Poetry Env (CUDA-ready)
+chcp 65001 > nul
 
 :: 📁 Ensure .vscode directory exists
 if not exist ".vscode" (
@@ -23,8 +24,19 @@ if %errorlevel%==0 (
 )
 
 echo 🔪 Deleting old .venv and __pycache__...
-rmdir /s /q .venv
-rmdir /s /q __pycache__
+rmdir /s /q .venv > nul 2>&1
+rmdir /s /q __pycache__ > nul 2>&1
+
+:: 📦 Check if Poetry is installed
+where poetry > nul 2>&1
+if %errorlevel% neq 0 (
+    echo 🚧 Poetry not found. Installing it now...
+    curl -sSL https://install.python-poetry.org | python -
+    setx PATH "%APPDATA%\Python\Scripts;%PATH%"
+    echo 🆗 Poetry installed. Restart this terminal or run install.bat again.
+    pause
+    exit /b
+)
 
 echo 🚀 Installing from pyproject.toml...
 poetry install
