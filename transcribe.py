@@ -89,8 +89,7 @@ def create_ai_cleaned_text(text):
     return text.strip()
 
 def main():
-    os.makedirs("./3-output/", exist_ok=True)
-    os.makedirs("./2-audio_processed/", exist_ok=True)
+    os.makedirs("./2-output/", exist_ok=True)
 
     script_start_time = time.time()
 
@@ -199,7 +198,7 @@ def main():
         return len(encoding.encode(text))
 
     audio_folder = "./1-audio"
-    output_folder = "./3-output"
+    output_folder = "./2-output"
     stats = []
 
     total_size = total_chars = total_tokens = total_time = total_length = 0
@@ -265,13 +264,7 @@ def main():
 
             # Copy the audio file to the output directory
             audio_out_path = os.path.join(out_dir, filename)
-            with open(path, "rb") as src_file, open(audio_out_path, "wb") as dst_file:
-                dst_file.write(src_file.read())
-            
-            # Move the processed audio file to the processed folder
-            processed_path = os.path.join("./2-audio_processed/", filename)
-            # Use os.replace which overwrites the destination file if it exists (unlike os.rename)
-            os.replace(path, processed_path)
+            os.rename(path, audio_out_path)  # Replaced shutil.move with os.rename
 
             duration = result["segments"][-1]["end"] / 60
             elapsed = time.time() - start_time

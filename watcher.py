@@ -92,8 +92,7 @@ def main():
 
     print("\nINSTRUCTIONS\n")
     print(f" 1. Add audio files into {gray('1-audio/')}")
-    print(f" 2. Files auto-process and move to {gray('2-audio_processed/')}")
-    print(f" 3. Transcripts are saved to {gray('3-output/')}")
+    print(f" 2. Transcripts are saved to {gray('2-output/')}")
     print("\n" + "─" * 70 + "\n")
 
     print(f"🟢 Ready to transcribe new audio files in {cyan(PRETTY_WATCH_PATH)}...\n")
