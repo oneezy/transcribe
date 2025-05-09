@@ -5,6 +5,7 @@ import io
 import contextlib
 import os
 import re
+import shutil # Re-instating shutil for robust file moving
 import time
 import tiktoken
 import torch
@@ -90,6 +91,8 @@ def create_ai_cleaned_text(text):
 
 def main():
     os.makedirs("./2-output/", exist_ok=True)
+    temp_output_root_dir = "./processing"  # New temporary staging directory
+    os.makedirs(temp_output_root_dir, exist_ok=True)
 
     script_start_time = time.time()
 
@@ -240,35 +243,65 @@ def main():
                     transcripts.append(f"{m:02d}:{s:02d} > {text}")
 
             base = os.path.splitext(filename)[0]
+            
+            # Create a temporary directory for the current audio file's transcripts
+            temp_current_audio_dir = os.path.join(temp_output_root_dir, base)
+            os.makedirs(temp_current_audio_dir, exist_ok=True)
+
+            timestamp_text = "\\n".join(transcripts)
+            raw_text = " ".join(seg["text"].strip() for seg in segments if seg["text"].strip())
+            min_text = remove_filler_words(raw_text)
+            ai_text = create_ai_cleaned_text(raw_text)
+
+            # Define temporary paths for transcript files
+            temp_timestamps_path = os.path.join(temp_current_audio_dir, f"{base}.timestamps.txt")
+            temp_raw_path = os.path.join(temp_current_audio_dir, f"{base}.raw.txt")
+            temp_min_original_path = os.path.join(temp_current_audio_dir, f"{base}.min.txt") # For the 'original' subfolder
+            temp_main_out_txt_path = os.path.join(temp_current_audio_dir, f"{base}.txt")      # For the main output folder
+            temp_ai_path = os.path.join(temp_current_audio_dir, f"{base}.ai.txt")
+
+            # Write transcript files to temporary location
+            with open(temp_timestamps_path, "w", encoding="utf-8") as f:
+                f.write(timestamp_text)
+            with open(temp_raw_path, "w", encoding="utf-8") as f:
+                f.write(raw_text)
+            with open(temp_min_original_path, "w", encoding="utf-8") as f:
+                f.write(min_text)
+            with open(temp_main_out_txt_path, "w", encoding="utf-8") as f:
+                f.write(min_text)
+            with open(temp_ai_path, "w", encoding="utf-8") as f:
+                f.write(ai_text)
+
+            # Create final destination directories
             out_dir = os.path.join(output_folder, base)
             os.makedirs(out_dir, exist_ok=True)
             original_dir = os.path.join(out_dir, "original")
             os.makedirs(original_dir, exist_ok=True)
 
-            timestamp_text = "\n".join(transcripts)
-            raw_text = " ".join(seg["text"].strip() for seg in segments if seg["text"].strip())
-            min_text = remove_filler_words(raw_text)
+            # Define final paths and move transcript files from temporary to final destination
+            final_timestamps_path = os.path.join(original_dir, f"{base}.timestamps.txt")
+            final_raw_path = os.path.join(original_dir, f"{base}.raw.txt")
+            final_min_original_path = os.path.join(original_dir, f"{base}.min.txt")
+            final_main_out_txt_path = os.path.join(out_dir, f"{base}.txt")
+            final_ai_path = os.path.join(original_dir, f"{base}.ai.txt")
 
-            with open(os.path.join(original_dir, f"{base}.timestamps.txt"), "w", encoding="utf-8") as f:
-                f.write(timestamp_text)
-            with open(os.path.join(original_dir, f"{base}.raw.txt"), "w", encoding="utf-8") as f:
-                f.write(raw_text)
-            with open(os.path.join(original_dir, f"{base}.min.txt"), "w", encoding="utf-8") as f:
-                f.write(min_text)
-            out_txt_path = os.path.join(out_dir, f"{base}.txt")
-            with open(out_txt_path, "w", encoding="utf-8") as f:
-                f.write(min_text)
-            ai_text = create_ai_cleaned_text(raw_text)
-            with open(os.path.join(original_dir, f"{base}.ai.txt"), "w", encoding="utf-8") as f:
-                f.write(ai_text)
-
-            # Copy the audio file to the output directory
+            shutil.move(temp_timestamps_path, final_timestamps_path)
+            shutil.move(temp_raw_path, final_raw_path)
+            shutil.move(temp_min_original_path, final_min_original_path)
+            shutil.move(temp_main_out_txt_path, final_main_out_txt_path)
+            shutil.move(temp_ai_path, final_ai_path)
+            
+            # Move the audio file to the output directory (as before)
             audio_out_path = os.path.join(out_dir, filename)
-            os.rename(path, audio_out_path)  # Replaced shutil.move with os.rename
+            shutil.move(path, audio_out_path)
+
+            # Clean up the temporary directory for this specific audio file
+            shutil.rmtree(temp_current_audio_dir)
 
             duration = result["segments"][-1]["end"] / 60
             elapsed = time.time() - start_time
-            size_kb = os.path.getsize(os.path.join(out_dir, f"{base}.txt")) / 1024
+            # Ensure stats use the final path for size calculation
+            size_kb = os.path.getsize(final_main_out_txt_path) / 1024
             tcnt = count_tokens(min_text)
             cchar = len(min_text)
             total_length += duration
@@ -276,12 +309,20 @@ def main():
             total_size += size_kb
             total_tokens += tcnt
             total_chars += cchar
-            pretty_path = out_txt_path.replace("\\", "/")
+            # Ensure stats use the final path for display
+            pretty_path = final_main_out_txt_path.replace("\\\\", "/")
             stats.append([f"{cyan(pretty_path)}", f"{int(duration)}:{int((duration % 1) * 60):02d}", f"{size_kb:.2f}", cchar, tcnt, f"{elapsed:.2f}"])
-            # print(f"✅ Completed in {green(f"{elapsed:.2f}s")}")
+            # print(f"✅ Completed in {green(f'{elapsed:.2f}s')}")
             # print("")
 
-    print("\nResults")
+    # Optional: Clean up the root temporary directory at the end if it's empty and not needed
+    try:
+        if not os.listdir(temp_output_root_dir):
+            os.rmdir(temp_output_root_dir)
+    except OSError:
+        pass # Ignore if not empty or other issues, not critical
+
+    print("\\nResults")
     print(tabulate(stats, headers=["File", "Audio", "Size (KB)", "Chars", "Tokens", "Time(s)"], tablefmt="grid"))
 
     elapsed_total = time.time() - script_start_time
