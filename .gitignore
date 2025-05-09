@@ -14,5 +14,11 @@ dist/
 
 # Don't track shared transcriptions folders (they're symlinked to GDrive)
 1-audio/
+1-audio
 2-audio_processed/
+2-audio_processed
 3-output/
+3-output
+bak/
+
+symlink.bat
