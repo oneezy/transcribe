@@ -4,7 +4,6 @@ import subprocess
 import threading
 import time
 import os
-import shutil
 from colors import cyan, gray
 
 def pretty_path(path):

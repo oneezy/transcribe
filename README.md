@@ -1,198 +1,141 @@
 # Audio Transcription Tool
 
-A Python-based audio transcription tool that uses WhisperX to convert audio files to text with timestamps and provides detailed statistics.
+A Python-based audio transcription tool using WhisperX to convert audio files to text with word-level timestamps and performance stats.
 
-## Overview
+---
 
-This tool transcribes audio files (MP3, WAV) into text documents with optional timestamps. It uses WhisperX, which provides fast and accurate transcription with word-level timestamp alignment.
+## 🚀 Quick Start (Recommended)
 
-## Directory Structure
+### ✅ Step 1: Run `install.bat`
+This installs everything you need: Python deps, WhisperX, and sets up the workspace.
 
-- `0-queue/`: queue folder for files to be processed
-- `1-audio/`: Place your audio files here for processing
-- `2-audio_processed/`: Contains processed audio files
-- `3-output/`: Contains transcription results
+### ✅ Step 2: Run `transcribe.bat`
+This watches the `1-audio/` folder and automatically transcribes anything you drop in.
 
-## Prerequsites
+> That's it — you're ready to go! Skip the manual setup below unless you're customizing things.
+
+---
+
+## 📁 Directory Structure
+
+- `1-audio/`: Drop your `.mp3` or `.wav` files here
+- `2-output/`: Where all transcripts and outputs land
+
+```
+2-output/
+└── audio/                          Folder named after the audio file's base name
+    ├── original/
+    │   ├── audio.ai.txt            AI-cleaned transcript
+    │   ├── audio.min.txt           Same as audio.txt in parent (cleaned)
+    │   ├── audio.raw.txt           Raw transcript before cleaning
+    │   └── audio.timestamps.txt    Transcript with timestamps
+    ├── audio.mp3                   Original audio file 
+    └── audio.txt                   Cleaned transcript, filler words removed
+```
+
+---
+
+## ⚙️ Manual Setup (Optional)
+
+If you want to dig deeper or customize things, here's the manual route.
+
+### Prerequisites
 
 - Python 3.12.x (must be < 3.13)
-- [Poetry](https://python-poetry.org/) (for dependency & venv management)
-- 
-## Requirements
+- [Poetry](https://python-poetry.org/)
+- Hugging Face account + API token (for speaker diarization)
 
-- Python 3.x
-- WhisperX
-- PyTorch
-- Tiktoken
-- Tabulate
-- Hugging Face account and API token (for diarization features)
+### Option A) Using Poetry (recommended)
 
-## Setup
+```bash
+# Install Poetry
+pip install poetry
+# or
+pipx install poetry
 
-You can choose **one** of two workflows: traditional `pip` or modern `Poetry`.
+# Clone and enter repo
+git clone https://github.com/oneezy/transcribe.git
+cd transcribe
 
-### A) Using Poetry (recommended)
+# Install deps
+poetry install
 
-1. Install Poetry globally (or via pipx):
-   ```bash
-   pip install poetry
-   # or, if you have pipx:
-   pipx install poetry
-   ```
+# Run
+poetry run python transcribe.py
+````
 
-2. Clone the repo and `cd` into it:
-   ```bash
-   git clone https://github.com/oneezy/transcribe.git
-   cd transcribe
-   ```
+### Option B) Using pip
 
-3. Install dependencies and create a venv automatically:
-   ```bash
-   poetry install
-   ```
+```bash
+# Create venv
+python -m venv .venv
+.venv\Scripts\activate  # Windows
 
-4. Run the script:
-   ```bash
-   poetry run python transcribe.py
-   ```
+# Install deps
+pip install -r requirements.txt
 
-### B) Using pip and a virtual environment
+# Run
+python transcribe.py
+```
 
-1. Create and activate a venv:
-   ```bash
-   python -m venv .venv
-   .venv\Scripts\activate  # For Windows
-   ```
+---
 
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+## 📦 Usage
 
-3. Copy and edit your `.env` file:
-   ```bash
-   cp .env-sample .env
-   ```
-   Add your Hugging Face API token from [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
-
-## Usage
-
-### Basic Usage
+### Basic
 
 ```bash
 python transcribe.py
 ```
 
-This will use the default model (large-v3-turbo) to transcribe all audio files in the `1-audio/` directory.
-
-### Using the Executable
-
-If you're using the packaged executable version:
+### Watch for files
 
 ```bash
-transcribe.exe
-# or specify a model
-transcribe.exe medium
-# or use advanced options
-transcribe.exe --model large-v3-turbo --batch_size 4
+poetry run python watcher.py
 ```
 
-Place your audio files in the `1-audio` folder next to the executable.
-
-### Specifying a Model
+### Choose a model
 
 ```bash
-python transcribe.py [model_name]
-```
-
-Where `[model_name]` can be one of:
-- `tiny`: Fastest but least accurate
-- `base`: Fast with basic accuracy
-- `small`: Good balance for shorter files
-- `medium`: Better accuracy, slower
-- `large-v2`: High accuracy
-- `large-v3`: Latest model with best accuracy
-- `large-v3-turbo`: Latest model optimized for speed and accuracy (default)
-
-### Advanced Options
-
-```bash
-python transcribe.py --model [model_name] --batch_size [size] --compute_type [type]
-```
-
-Options:
-- `--model`: Specify the WhisperX model
-- `--batch_size`: Control batch size for performance (default is based on model)
-- `--compute_type`: Set computation precision (`float16`, `float32`, or `int8`)
-- `--language`: Set language code (default is "en" for English)
-
-## Output
-
-For each audio file processed, the tool generates:
-
-1. A plain text transcript: `3-output/[filename]/[filename].txt`
-2. A timestamped transcript: `3-output/[filename]/[filename]-timestamps.txt`
-
-The timestamps format is `MM:SS > transcript text`
-
-## Performance Statistics
-
-After processing, the tool displays a table with statistics for each file:
-- File name
-- Audio duration
-- Output file size
-- Character count
-- Token count
-- Processing time
-
-## Example
-
-```bash
-# Process all files using the medium model
 python transcribe.py medium
+```
 
-# Process with specific batch size and compute type
+### Advanced options
+
+```bash
 python transcribe.py --model large-v3-turbo --batch_size 4 --compute_type int8
 ```
 
-## Using WhisperX CLI Commands
+---
 
-For direct WhisperX commands (as shown in `commands.txt`), make sure to use your environment variable:
+## 📊 Output Includes
+
+* Duration
+* File size
+* Token/char count
+* Processing time
+* Cleaned transcript
+* Timestamps
+
+---
+
+## 🛠 WhisperX CLI (if needed)
 
 ```bash
 whisperx 1-audio/sample.mp3 \
   --model large-v3-turbo \
-  --diarize \
-  --hf_token ${HF_TOKEN} \
-  --output_dir 3-output/sample
+  --output_dir 2-output/sample
 ```
 
-## Packaging the Executable
+---
 
-To create a standalone executable that can be shared with others:
+## 💡 Tips
 
-1. Install PyInstaller:
-   ```bash
-   pip install pyinstaller
-   ```
+* Use `tiny` + `int8` for slow machines
+* Use `.env` to store Hugging Face API key
+* Auto fallback for OOM errors
+* Everything’s bundled if you're using the `.exe` version (no Python needed)
 
-2. Create the executable:
-   ```bash
-   pyinstaller transcribe.spec
-   ```
+---
 
-3. The executable will be created in the `dist` folder.
-
-4. To distribute:
-   - Share the entire `dist/transcribe` folder
-   - Users should ensure they have the correct folder structure:
-     - Place audio files in the `1-audio` folder
-     - Transcriptions will appear in the `3-output` folder
-
-## Tips
-
-- For large files, use a smaller batch size to prevent memory issues
-- If you encounter CUDA out-of-memory errors, the script will automatically try with a smaller batch size
-- For faster processing on slower hardware, use the `tiny` or `base` models with `int8` compute type
-- Keep your API tokens in the `.env` file and never commit them directly to version control
-- When using the executable version, all necessary dependencies are bundled - no need to install Python or any packages
+Built with ❤️ by [oneezy.com](https://oneezy.com)
